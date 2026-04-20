@@ -1,0 +1,17 @@
+# Python cache and environments
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Runtime artifacts
+*.mp4

@@ -1,4 +1,5 @@
 import string
+import cv2
 import easyocr
 
 # Initialize the OCR reader
@@ -116,15 +117,46 @@ def read_license_plate(license_plate_crop):
         tuple: Tuple containing the formatted license plate text and its confidence score.
     """
 
-    detections = reader.readtext(license_plate_crop)
+    if license_plate_crop is None or license_plate_crop.size == 0:
+        return None, None
 
-    for detection in detections:
-        bbox, text, score = detection
+    def _clean_text(text):
+        return ''.join(ch for ch in text.upper() if ch.isalnum())
 
-        text = text.upper().replace(' ', '')
+    best_fallback_text = None
+    best_fallback_score = -1.0
 
-        if license_complies_format(text):
-            return format_license(text), score
+    # Try OCR on the original crop and an upscaled version to improve recall.
+    ocr_inputs = [license_plate_crop]
+    try:
+        upscaled = cv2.resize(license_plate_crop, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
+        ocr_inputs.append(upscaled)
+    except Exception:
+        pass
+
+    for ocr_input in ocr_inputs:
+        detections = reader.readtext(
+            ocr_input,
+            allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+            detail=1,
+            paragraph=False,
+        )
+
+        for _bbox, text, score in detections:
+            cleaned_text = _clean_text(text)
+            if not cleaned_text:
+                continue
+
+            if license_complies_format(cleaned_text):
+                return format_license(cleaned_text), float(score)
+
+            # Fallback: keep a best alphanumeric candidate if strict format is not met.
+            if 5 <= len(cleaned_text) <= 10 and float(score) > best_fallback_score:
+                best_fallback_text = cleaned_text
+                best_fallback_score = float(score)
+
+    if best_fallback_text is not None:
+        return best_fallback_text, best_fallback_score
 
     return None, None
 
